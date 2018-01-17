@@ -700,6 +700,13 @@ class Bridge(object):
         else:
             return False
 
+    def save_config(self,success_line):
+        with open(self.config_file_path, 'w') as f:
+            logger.info(
+                'Writing configuration file to ' + self.config_file_path)
+            f.write(json.dumps({self.ip: success_line}))
+            logger.info('Reconnecting to the bridge')
+
     def register_app(self):
         """ Register this computer with the Hue bridge hardware and save the resulting access token """
         registration_request = {"devicetype": "python_hue"}
@@ -707,11 +714,7 @@ class Bridge(object):
         for line in response:
             for key in line:
                 if 'success' in key:
-                    with open(self.config_file_path, 'w') as f:
-                        logger.info(
-                            'Writing configuration file to ' + self.config_file_path)
-                        f.write(json.dumps({self.ip: line['success']}))
-                        logger.info('Reconnecting to the bridge')
+                    self.save_config(line['success'])
                     self.connect()
                 if 'error' in key:
                     error_type = line['error']['type']
@@ -719,8 +722,7 @@ class Bridge(object):
                         raise PhueRegistrationException(error_type,
                                                         'The link button has not been pressed in the last 30 seconds.')
                     if error_type == 7:
-                        raise PhueException(error_type,
-                                            'Unknown username')
+                        raise PhueException(error_type, 'Unknown username')
 
     def connect(self):
         """ Connect to the Hue bridge """
@@ -1241,11 +1243,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', required=True)
     parser.add_argument('--config-file-path', required=False)
+    parser.add_argument('--username', required=False)
+    parser.add_argument('--save', action="store_true")
     args = parser.parse_args()
 
     while True:
         try:
-            b = Bridge(args.host, config_file_path=args.config_file_path)
+            b = Bridge(args.host, username=args.username, config_file_path=args.config_file_path)
+            if b and args.save:
+                b.save_config({'username': args.username})
+                print("Connection succeed; %s saved" % b.config_file_path)
+            print(b.lights)
             break
         except PhueRegistrationException as e:
             if PY3K:
